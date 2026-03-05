@@ -5,11 +5,13 @@
     "description": "Automatically applies to LinkedIn jobs using your preset profile data.",
     "permissions": [
         "activeTab",
-        "scripting"
+        "scripting",
+        "storage"
     ],
     "host_permissions": [
         "*://*.linkedin.com/*"
     ],
+    "options_page": "options.html",
     "icons": {
         "16": "icon.png",
         "48": "icon.png",

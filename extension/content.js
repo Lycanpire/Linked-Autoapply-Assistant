@@ -1,22 +1,21 @@
-const PHONE = "+917895152544";
-const EMAIL = "saaj.work@gmail.com";
-const CURRENT_CTC = "1500000";
-const EXPECTED_CTC = "2000000";
-const NOTICE_PERIOD_DAYS = "30";
-const YEARS_OF_EXPERIENCE = "4";
-
-const BLACKLIST = ["paytm", "one 97", "iris gst", "sovos"];
-
+function getProfile() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['userProfile'], (result) => {
+            resolve(result.userProfile || {});
+        });
+    });
+}
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function containsBlacklist(text) {
+function containsBlacklist(text, blacklist) {
+    if (!blacklist || blacklist.length === 0) return false;
     text = text.toLowerCase();
-    return BLACKLIST.some(company => text.includes(company.toLowerCase()));
+    return blacklist.some(company => text.includes(company.toLowerCase()));
 }
 
-async function fillInputs() {
+async function fillInputs(profile) {
     try {
         // Handle text/number inputs
         const inputs = document.querySelectorAll("input:not([type='hidden']):not([type='file']):not([type='radio'])");
@@ -28,12 +27,12 @@ async function fillInputs() {
                     const textLabel = label.innerText.toLowerCase();
                     let val = "";
 
-                    if (["phone", "mobile"].some(k => textLabel.includes(k))) val = PHONE;
-                    else if (["email"].some(k => textLabel.includes(k))) val = EMAIL;
-                    else if (["current ctc", "current salary"].some(k => textLabel.includes(k))) val = CURRENT_CTC;
-                    else if (["expected ctc", "expected salary"].some(k => textLabel.includes(k))) val = EXPECTED_CTC;
-                    else if (["notice period", "notice"].some(k => textLabel.includes(k))) val = NOTICE_PERIOD_DAYS;
-                    else if (["experience", "years"].some(k => textLabel.includes(k))) val = YEARS_OF_EXPERIENCE;
+                    if (["phone", "mobile"].some(k => textLabel.includes(k))) val = profile.phone;
+                    else if (["email"].some(k => textLabel.includes(k))) val = profile.email;
+                    else if (["current ctc", "current salary"].some(k => textLabel.includes(k))) val = profile.currentCtc;
+                    else if (["expected ctc", "expected salary"].some(k => textLabel.includes(k))) val = profile.expectedCtc;
+                    else if (["notice period", "notice"].some(k => textLabel.includes(k))) val = profile.noticePeriod;
+                    else if (["experience", "years"].some(k => textLabel.includes(k))) val = profile.experience;
 
                     if (val && !inputBox.value) {
                         try {
@@ -139,7 +138,7 @@ async function closeModal() {
     } catch (e) { }
 }
 
-async function applyToJob(jobCard) {
+async function applyToJob(jobCard, profile) {
     try {
         jobCard.scrollIntoView({ block: 'center' });
         await sleep(1000);
@@ -149,7 +148,7 @@ async function applyToJob(jobCard) {
         const companyNameElement = jobCard.querySelector('.job-card-container__primary-description');
         const company = companyNameElement ? companyNameElement.innerText : "";
 
-        if (containsBlacklist(company)) {
+        if (containsBlacklist(company, profile.blacklist)) {
             console.log("Skipped blacklisted company: " + company);
             return;
         }
@@ -166,7 +165,7 @@ async function applyToJob(jobCard) {
 
         const maxModalPages = 10;
         for (let i = 0; i < maxModalPages; i++) {
-            await fillInputs();
+            await fillInputs(profile);
             await sleep(1000);
 
             const nextBtns = Array.from(document.querySelectorAll("button.artdeco-button--primary")).filter(b => {
@@ -211,6 +210,14 @@ let isRunning = false;
 
 async function runAutofill() {
     if (isRunning) return;
+
+    // Fetch user profile from storage before starting
+    const profile = await getProfile();
+    if (!profile.phone || !profile.email) {
+        alert("Please click the '⚙️ Setup Profile' button in the extension popup to configure your details first!");
+        return;
+    }
+
     isRunning = true;
     console.log("Starting Auto Apply Process...");
 
@@ -240,7 +247,7 @@ async function runAutofill() {
                 return;
             }
             console.log(`Checking job ${i + 1} of ${jobs.length}...`);
-            await applyToJob(jobs[i]);
+            await applyToJob(jobs[i], profile);
             await sleep(1500);
         }
 
