@@ -1,0 +1,35 @@
+{
+    "manifest_version": 3,
+    "name": "LinkedIn Auto Apply Bot",
+    "version": "1.0",
+    "description": "Automatically applies to LinkedIn jobs using your preset profile data.",
+    "permissions": [
+        "activeTab",
+        "scripting"
+    ],
+    "host_permissions": [
+        "*://*.linkedin.com/*"
+    ],
+    "icons": {
+        "16": "icon.png",
+        "48": "icon.png",
+        "128": "icon.png"
+    },
+    "action": {
+        "default_popup": "popup.html",
+        "default_icon": "icon.png"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "*://*.linkedin.com/jobs/*"
+            ],
+            "js": [
+                "content.js"
+            ]
+        }
+    ],
+    "background": {
+        "service_worker": "background.js"
+    }
+}
