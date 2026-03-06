@@ -1,7 +1,11 @@
 function getProfile() {
-    return new Promise((resolve) => {
-        chrome.storage.local.get(['userProfile'], (result) => {
-            resolve(result.userProfile || {});
+    return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ action: "fetch_profile" }, (response) => {
+            if (response && response.success) {
+                resolve(response.data);
+            } else {
+                reject(new Error(response ? response.error : "Failed to connect to background script."));
+            }
         });
     });
 }
@@ -29,8 +33,10 @@ async function fillInputs(profile) {
 
                     if (["phone", "mobile"].some(k => textLabel.includes(k))) val = profile.phone;
                     else if (["email"].some(k => textLabel.includes(k))) val = profile.email;
-                    else if (["current ctc", "current salary"].some(k => textLabel.includes(k))) val = profile.currentCtc;
-                    else if (["expected ctc", "expected salary"].some(k => textLabel.includes(k))) val = profile.expectedCtc;
+                    else if (textLabel.includes("salary") || textLabel.includes("ctc") || textLabel.includes("pay")) {
+                        if (textLabel.includes("expected") || textLabel.includes("new")) val = profile.expectedCtc;
+                        else val = profile.currentCtc;
+                    }
                     else if (["notice period", "notice"].some(k => textLabel.includes(k))) val = profile.noticePeriod;
                     else if (["experience", "years"].some(k => textLabel.includes(k))) val = profile.experience;
 
@@ -97,7 +103,19 @@ async function fillInputs(profile) {
                     questionText = parentText;
                 }
 
-                if (questionText.includes("commute") ||
+                if (questionText.includes("notice period") || questionText.includes("notice")) {
+                    const noticeVal = profile.noticePeriod ? profile.noticePeriod.toLowerCase() : "";
+                    const options = select.querySelectorAll("option");
+                    if (noticeVal) {
+                        for (let option of options) {
+                            if (option.innerText.toLowerCase().includes(noticeVal)) {
+                                select.value = option.value;
+                                select.dispatchEvent(new Event('change', { bubbles: true }));
+                                break;
+                            }
+                        }
+                    }
+                } else if (questionText.includes("commute") ||
                     questionText.includes("commuting") ||
                     questionText.includes("onsite") ||
                     questionText.includes("relocate") ||
@@ -105,7 +123,8 @@ async function fillInputs(profile) {
                     questionText.includes("sponsorship") ||
                     questionText.includes("clearance") ||
                     questionText.includes("authorized") ||
-                    questionText.includes("willing to")) {
+                    questionText.includes("willing to") ||
+                    questionText.includes("office")) {
 
                     const options = select.querySelectorAll("option");
                     for (let option of options) {
@@ -115,6 +134,29 @@ async function fillInputs(profile) {
                             break;
                         }
                     }
+                }
+            }
+        }
+
+        // Handle checkboxes (like Terms and Conditions or Privacy Policy)
+        const checkboxes = document.querySelectorAll("input[type='checkbox']");
+        for (let checkbox of checkboxes) {
+            if (!checkbox.checked) {
+                const fieldId = checkbox.getAttribute("id");
+                let textLabel = "";
+                if (fieldId) {
+                    const label = document.querySelector(`label[for='${fieldId}']`);
+                    if (label) textLabel = label.innerText.toLowerCase();
+                }
+                if (!textLabel && checkbox.parentElement) {
+                    textLabel = checkbox.parentElement.innerText.toLowerCase();
+                }
+
+                if (textLabel.includes("agree") || textLabel.includes("terms") || textLabel.includes("conditions") || textLabel.includes("privacy") || textLabel.includes("policy") || textLabel.includes("acknowledge")) {
+                    // Try to click the label first, otherwise the checkbox
+                    const label = fieldId ? document.querySelector(`label[for='${fieldId}']`) : null;
+                    if (label) label.click();
+                    else checkbox.click();
                 }
             }
         }
@@ -168,6 +210,18 @@ async function applyToJob(jobCard, profile) {
             await fillInputs(profile);
             await sleep(1000);
 
+            // If we are stuck on a page with validation errors, discard to avoid infinite loop
+            const errorElements = document.querySelectorAll(".artdeco-inline-feedback--error, [data-test-form-builder-error-message]");
+            let hasVisibleErrors = false;
+            for (let err of errorElements) {
+                if (err.offsetParent !== null) hasVisibleErrors = true;
+            }
+            if (hasVisibleErrors) {
+                console.log("Validation errors found. Discarding to avoid getting stuck.");
+                await closeModal();
+                return;
+            }
+
             const nextBtns = Array.from(document.querySelectorAll("button.artdeco-button--primary")).filter(b => {
                 const text = b.innerText.toLowerCase();
                 return text.includes('next') || text.includes('review') || text.includes('submit');
@@ -211,10 +265,18 @@ let isRunning = false;
 async function runAutofill() {
     if (isRunning) return;
 
-    // Fetch user profile from storage before starting
-    const profile = await getProfile();
+    let profile;
+    try {
+        profile = await getProfile();
+    } catch (error) {
+        alert("Job Bot Error: " + error.message);
+        isRunning = false;
+        return;
+    }
+
     if (!profile.phone || !profile.email) {
-        alert("Please click the '⚙️ Setup Profile' button in the extension popup to configure your details first!");
+        alert("Please log in and configure your details on the Job Bot Dashboard (http://localhost:3000/dashboard) before starting!");
+        isRunning = false;
         return;
     }
 

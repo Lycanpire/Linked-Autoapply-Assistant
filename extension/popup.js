@@ -44,9 +44,6 @@ document.getElementById('stop-btn').addEventListener('click', () => {
 });
 
 document.getElementById('settings-btn').addEventListener('click', () => {
-    if (chrome.runtime.openOptionsPage) {
-        chrome.runtime.openOptionsPage();
-    } else {
-        window.open(chrome.runtime.getURL('options.html'));
-    }
+    // Open the new SaaS Web Dashboard instead of the old local Options page
+    window.open('http://localhost:3000/dashboard', '_blank');
 });

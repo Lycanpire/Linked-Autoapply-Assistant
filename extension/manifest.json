@@ -9,9 +9,9 @@
         "storage"
     ],
     "host_permissions": [
-        "*://*.linkedin.com/*"
+        "*://*.linkedin.com/*",
+        "http://localhost:3000/*"
     ],
-    "options_page": "options.html",
     "icons": {
         "16": "icon.png",
         "48": "icon.png",
